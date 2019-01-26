@@ -1,0 +1,9 @@
+[
+  {
+    "address" : "http://localhost:8080/",
+    "name": "Stockfish 7 x64",
+    "userName" : "test",
+    "password" : "lukasz",
+    "showEngineName" : false
+  }
+]

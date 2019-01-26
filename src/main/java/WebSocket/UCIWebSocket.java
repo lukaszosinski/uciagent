@@ -2,6 +2,7 @@
 package WebSocket;
 
 
+import Models.EngineModel;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -16,36 +17,69 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 public class UCIWebSocket {
-    private WebSocket webSocket = null;
-    private String authorizationToken = null;
-    private HttpURLConnection httpLoginConnection = null;
+    private WebSocket webSocket;
+    private String serverURL;
+    private String authorizationToken;
+    private String engineName;
+    private Boolean showEngineName;
+
+
     private boolean connected = false;
 
 
+    public UCIWebSocket(EngineModel model) {
+        serverURL = model.address;
+        engineName = model.name;
+        showEngineName = model.showEngineName;
 
-    public UCIWebSocket(String url) {
-        String engineAddress = new String(url + "ws_engine");
-        String loginAddress = new String(url + "user/login");
+        String engineAddress = serverURL + "ws_engine";
+        String loginAddress = serverURL + "user/login";
 
-        httpLoginConnection = getLoginConnection(loginAddress);
-        JSONObject loginData = getLoginDataAsJSON();
-        authorizationToken = loginAndGetAuthToken(loginData);
+
+        HttpURLConnection loginConnection = getPOSTConnectionForURL(loginAddress);
+        JSONObject loginData = getLoginDataAsJSON(model.userName, model.password);
+        JSONObject response = processAndGetJSONResponse(loginData, loginConnection);
+        authorizationToken = response.getString("token");
         webSocket = openEngineWebSocket(engineAddress);
+        this.start();
+    }
+
+    public boolean start() {
+        String startAddress = serverURL + "engine/start";
+        return startOrStopEngine(startAddress);
+    }
+
+    public boolean stop() {
+        String stopAddress = serverURL + "engine/stop";
+        return startOrStopEngine(stopAddress);
+    }
+
+    private boolean startOrStopEngine(String address) {
+        JSONObject data = new JSONObject();
+        data.put("engine", engineName);
+        HttpURLConnection engineStartConnection = getPOSTConnectionForURL(address);
+        JSONObject response = processAndGetJSONResponse(data, engineStartConnection);
+        return (Boolean) response.get("success");
     }
 
     public void send(String message) {
         webSocket.send(message);
     }
 
-    private HttpURLConnection getLoginConnection(String loginAdress) {
+    public void close() {
+        webSocket.close(1000, "OK");
+    }
+
+    private HttpURLConnection getPOSTConnectionForURL(String url) {
         HttpURLConnection con = null;
         try {
-            URL loginURL = new URL(loginAdress);
+            URL loginURL = new URL(url);
             con = (HttpURLConnection) loginURL.openConnection();
             con.setDoOutput(true);
             con.setDoInput(true);
             con.setRequestProperty("Content-Type", "application/json");
             con.setRequestProperty("Accept", "application/json");
+            con.setRequestProperty("Authorization", "Bearer " + authorizationToken);
             con.setRequestMethod("POST");
         } catch (IOException e) {
             e.printStackTrace();
@@ -53,34 +87,32 @@ public class UCIWebSocket {
         return con;
     }
 
-    private JSONObject getLoginDataAsJSON() {
+    private JSONObject getLoginDataAsJSON(String userName, String password) {
         JSONObject loginData   = new JSONObject();
-        loginData.put("login", "test");
-        loginData.put("password", "lukasz");
+        loginData.put("login", userName);
+        loginData.put("password", password);
         return loginData;
     }
 
-    private String loginAndGetAuthToken(JSONObject loginData) {
+    private JSONObject processAndGetJSONResponse(JSONObject data, HttpURLConnection connection) {
         try {
-            OutputStreamWriter wr = new OutputStreamWriter(httpLoginConnection.getOutputStream());
-            wr.write(loginData.toString());
+            OutputStreamWriter wr = new OutputStreamWriter(connection.getOutputStream());
+            wr.write(data.toString());
             wr.flush();
 
             StringBuilder sb = new StringBuilder();
-            int HttpResult = httpLoginConnection.getResponseCode();
+            int HttpResult = connection.getResponseCode();
             if (HttpResult == HttpURLConnection.HTTP_OK) {
                 BufferedReader br = new BufferedReader(
-                        new InputStreamReader(httpLoginConnection.getInputStream(), "utf-8"));
+                        new InputStreamReader(connection.getInputStream(), "utf-8"));
                 String line = null;
                 while ((line = br.readLine()) != null) {
                     sb.append(line + "\n");
                 }
                 br.close();
-                JSONObject JSONResponse = new JSONObject(sb.toString());
-                authorizationToken = JSONResponse.getString("token");
-                return authorizationToken;
+                return new JSONObject(sb.toString());
             } else {
-                System.out.println(httpLoginConnection.getResponseMessage());
+                System.out.println(connection.getResponseMessage());
                 return null;
             }
         } catch (IOException e) {
@@ -98,6 +130,9 @@ public class UCIWebSocket {
         return client.newWebSocket(request, new WebSocketListener());
     }
 
+    public boolean isConnected() {
+        return connected;
+    }
 
 
     private final class WebSocketListener extends okhttp3.WebSocketListener {
@@ -111,8 +146,8 @@ public class UCIWebSocket {
         @Override
         public void onMessage(WebSocket webSocket, String text) {
             super.onMessage(webSocket, text);
-            System.out.println("Message received " + text);
-            //EventBus.getDefault().post(new MessageReceivedEvent(text));
+            System.out.println(showEngineName ? text + " : " + engineName : text) ;
+
         }
 
         @Override
