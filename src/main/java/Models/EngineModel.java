@@ -6,5 +6,4 @@ public class EngineModel {
     public String userName;
     public String password;
     public Boolean showEngineName;
-
 }

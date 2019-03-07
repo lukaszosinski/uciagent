@@ -140,20 +140,17 @@ public class UCIWebSocket {
         public void onOpen(WebSocket webSocket, Response response) {
             super.onOpen(webSocket, response);
             connected = true;
-            System.out.println("Web socket opened");
         }
 
         @Override
         public void onMessage(WebSocket webSocket, String text) {
             super.onMessage(webSocket, text);
-            System.out.println(showEngineName ? text + " : " + engineName : text) ;
-
+            System.out.println(showEngineName ? text + " : " + engineName : text);
         }
 
         @Override
         public void onClosed(WebSocket webSocket, int code, String reason) {
             connected = false;
-            System.out.println("Web socket closed reason: " + reason);
         }
 
         @Override
